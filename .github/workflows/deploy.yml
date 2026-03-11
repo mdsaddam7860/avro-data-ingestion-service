@@ -1,0 +1,53 @@
+# Chnage your application name qrcwtvjnna and project directory mricube-hubspot-integration accordingly
+# Add SSH_PRIVATE_KEY ,SERVER_IP, and SERVER_USER as secrets in your GitHub repository settings
+# Also change this mri_cube_server to your app name in pm2 restart command
+# Remove workflow_dispatch: if you don't want to trigger the workflow manually
+# Uncomment the push section if you want to trigger the workflow on push to main branch
+
+name: Deploy on Cloudways
+
+# on:
+#   push:
+#     branches:
+#       - main
+on :
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+
+      - name: Deploy code to Cloudways
+        run: |
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+          set -e
+
+          # Go to project directory
+          cd ~/applications/qrcwtvjnna/public_html/mricube-hubspot-integration
+
+          # Pull latest code
+          git pull origin main
+
+          # Install dependencies (production only)
+          npm ci --production
+
+          # Ensure PM2 is in PATH and restart/start the app
+          export PATH=$PATH:/usr/local/bin
+          /home/master/bin/npm/lib/node_modules/bin/pm2 restart mri_cube_server || /home/master/bin/npm/lib/node_modules/bin/pm2 start ecosystem.config.js
+
+          echo "Deployment completed successfully"
+          EOF
+
+
+
+          
