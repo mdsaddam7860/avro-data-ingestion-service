@@ -1,11 +1,11 @@
 {
-  "name": "blueprint",
+  "name": "avro-data-ingestion-servoce",
   "version": "1.0.0",
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "test": "node server.js",
-    "start": "node server.js"
+    "test": "node avro-data-ingestion-servoce.js",
+    "start": "node avro-data-ingestion-servoce.js"
   },
   "repository": {
     "type": "git",

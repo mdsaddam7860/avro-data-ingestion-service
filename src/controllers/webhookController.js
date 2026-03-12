@@ -1,8 +1,8 @@
 import {
   processAvroFile,
-  processAvroBuffer,
   postToTarget,
   postToWorkato,
+  processAvroHexToJson,
 } from "../services/avroService.js";
 import { logger } from "../index.js";
 // import fs from "fs"; // Use 'const fs = require('fs')' if not using ESM
@@ -28,7 +28,12 @@ const handleAvroWebhook = (req, res) => {
     // to handle errors without crashing the main process.
     processInBackground(filePath);
   } catch (error) {
-    logger.error("Webhook Error:", error.message);
+    logger.error("Webhook Error:", {
+      status: error?.status,
+      response: error?.response?.data || error?.response,
+      message: error?.message,
+      stack: error?.stack || error,
+    });
     if (!res.headersSent) {
       res.status(500).json({ error: "Internal Server Error" });
     }
@@ -118,16 +123,99 @@ async function processInBackground(filePath) {
       stack: error?.stack || error,
     });
   } finally {
-    // try {
-    //   // Using fs/promises makes 'await' work correctly here
-    //   await fs.unlink(filePath);
-    //   logger.info(`🗑️ Temporary file deleted: ${filePath}`);
-    // } catch (unlinkError) {
-    //   logger.warn(`⚠️ Cleanup failed: ${unlinkError.message}`);
-    // }
+    try {
+      // Using fs/promises makes 'await' work correctly here
+      await fs.unlink(filePath);
+      logger.info(`🗑️ Temporary file deleted: ${filePath}`);
+    } catch (unlinkError) {
+      logger.warn(`⚠️ Cleanup failed: ${unlinkError.message}`);
+    }
   }
 }
-export { handleAvroWebhook };
+
+const handleHexAvroWebhook = async (req, res) => {
+  try {
+    const rawHex = req.body.hexData;
+
+    if (!rawHex || typeof rawHex !== "string") {
+      return res
+        .status(400)
+        .json({ error: "Invalid or missing 'hexData' field" });
+    }
+
+    res.status(200).json({
+      // success: true,
+      message: "File received and processing started",
+    });
+
+    processInBackgroundAvroToJson(rawHex);
+  } catch (error) {
+    logger.error(`Webhook Error handleHexAvroWebhook : `, {
+      status: error?.status,
+      response: error?.response?.data || error?.response,
+      message: error?.message,
+      stack: error?.stack || error,
+    });
+    res.status(500).json({ error: error.message });
+  }
+};
+
+async function processInBackgroundAvroToJson(rawHex) {
+  try {
+    // 1. CLEANING STEP: Remove spaces, colons, newlines, and non-hex junk
+    // This turns "4F 62 6A" into "4F626A"
+    const cleanHex = rawHex.replace(/[^0-9a-fA-F]/g, "");
+
+    // 2. CONVERSION
+    const avroBuffer = Buffer.from(cleanHex, "hex");
+
+    // 3. VALIDATION
+    if (avroBuffer.length < 4) {
+      logger.error(`Malformed Hex. Received: ${cleanHex.substring(0, 10)}...`);
+      throw new Error(
+        `Buffer size too small (${avroBuffer.length} bytes). Hex string is malformed.`
+      );
+    }
+
+    logger.info(
+      `✅ Successfully converted Hex to Buffer. Size: ${avroBuffer.length} bytes`
+    );
+
+    // 4. PROCESS (Ensure processAvroFile handles Buffers as discussed)
+    const jsonData = await processAvroHexToJson(avroBuffer);
+
+    // logger.info(
+    //   `✅ Processed ${JSON.stringify(
+    //     jsonData[0],
+    //     null,
+    //     2
+    //   )} records successfully`
+    // );
+
+    const postToTargetResponse = await postToTarget(jsonData[0]);
+    logger.info(
+      `✅ Successfully sent ${jsonData.length} ${JSON.stringify(
+        postToTargetResponse,
+        null,
+        2
+      )} records to Target.`
+    );
+    return jsonData;
+  } catch (error) {
+    logger.error(`Webhook Error processInBackground : `, {
+      status: error?.status,
+      response: error?.response?.data || error?.response,
+      message: error?.message,
+      stack: error?.stack || error,
+    });
+  }
+}
+
+// status: error?.status,
+// response: error?.response?.data || error?.response,
+// message: error?.message,
+// stack: error?.stack || error,
+export { handleAvroWebhook, handleHexAvroWebhook };
 
 // logger.error("Webhook Error:", {
 //   httpStatus: error?.status,

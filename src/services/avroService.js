@@ -11,14 +11,59 @@ import { Readable } from "stream";
 const codecs = {
   snappy: (buf, cb) => {
     try {
-      // SnappyJS is synchronous, so we wrap it to satisfy the Avro callback
-      // Still strip the 4-byte checksum at the end
       const decompressed = SnappyJS.uncompress(buf.slice(0, buf.length - 4));
       cb(null, decompressed);
     } catch (err) {
       cb(err);
     }
   },
+};
+
+/**
+ * Process Avro data from either a File Path (string) or a Buffer
+ */
+const processAvroHexToJson = async (input) => {
+  const records = [];
+
+  return new Promise((resolve, reject) => {
+    let sourceStream;
+
+    // 1. Determine the source: Is it a path or a buffer?
+    if (Buffer.isBuffer(input)) {
+      // It's a Buffer (from Hex conversion)
+      sourceStream = Readable.from(input);
+      logger.info("Processing Avro from memory buffer...");
+    } else if (typeof input === "string") {
+      // It's a File Path (from disk storage)
+      sourceStream = fs.createReadStream(input);
+      logger.info(`Processing Avro from file: ${input}`);
+    } else {
+      return reject(
+        new Error(
+          "Invalid input: processAvroFile expects a Buffer or a string path."
+        )
+      );
+    }
+
+    const decoder = new avro.streams.BlockDecoder({ codecs });
+
+    sourceStream
+      .pipe(decoder)
+      .on("data", (record) => {
+        records.push(flattenAvro(record));
+      })
+      .on("end", () => {
+        logger.info(`Successfully processed ${records.length} records.`);
+        resolve(records);
+      })
+      .on("error", (err) => {
+        reject(new Error(`Avro Decoding Error: ${err.message}`));
+      });
+
+    sourceStream.on("error", (err) => {
+      reject(new Error(`Source Stream Error: ${err.message}`));
+    });
+  });
 };
 
 const processAvroFile = async (filePath) => {
@@ -120,43 +165,4 @@ const postToTarget = async (data) => {
   return res?.data;
 };
 
-// 1. Define the codec logic (Synchronous SnappyJS is best for Buffers)
-const codec = {
-  snappy: (buf, cb) => {
-    try {
-      // Avro Snappy blocks have a 4-byte CRC checksum at the end. Strip it.
-      const decompressed = SnappyJS.uncompress(buf.slice(0, buf.length - 4));
-      cb(null, decompressed);
-    } catch (err) {
-      cb(err);
-    }
-  },
-};
-
-const processAvroBuffer = async (buffer) => {
-  const records = [];
-
-  return new Promise((resolve, reject) => {
-    // 2. Convert the Multer buffer into a Readable Stream
-    const bufferStream = Readable.from(buffer);
-
-    // 3. IMPORTANT: Pass the { codec } object here!
-    const decoder = new avro.streams.BlockDecoder({ codec });
-
-    bufferStream
-      .pipe(decoder)
-      .on("data", (record) => {
-        // Flatten each record as it arrives
-        records.push(flattenAvro(record));
-      })
-      .on("end", () => {
-        resolve(records);
-      })
-      .on("error", (err) => {
-        // This is where your "unknown codec: snappy" error was coming from
-        reject(new Error(`Avro Error: ${err.message}`));
-      });
-  });
-};
-
-export { processAvroFile, postToTarget, postToWorkato, processAvroBuffer };
+export { processAvroFile, postToTarget, postToWorkato, processAvroHexToJson };
