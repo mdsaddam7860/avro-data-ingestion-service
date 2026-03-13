@@ -135,6 +135,7 @@ async function processInBackground(filePath) {
 
 const handleHexAvroWebhook = async (req, res) => {
   try {
+    logger.info(`📤 Received Body ${JSON.stringify(req.body, null, 2)}`);
     const rawHex = req.body.hexData;
 
     if (!rawHex || typeof rawHex !== "string") {
