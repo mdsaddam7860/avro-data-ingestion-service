@@ -105,8 +105,8 @@ const logger =
           new transports.File({
             filename: "logs/development.log",
             format: fileFormat,
-            level: "info",
-            maxsize: 5 * 1024 * 1024, // 5MB
+            level: "debug",
+            maxsize: 50 * 1024 * 1024, // 5MB
             handleExceptions: true,
             handleRejections: true,
           }),

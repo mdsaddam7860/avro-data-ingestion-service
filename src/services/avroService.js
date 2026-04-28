@@ -94,8 +94,8 @@ const processAvroFile = async (filePath) => {
   });
 };
 
-const postToWorkato = async (jsonData) => {
-  const WORKATO_WEBHOOK_URL = process.env.WORKATO_WEBHOOK_URL;
+const postToWorkato = async (WORKATO_WEBHOOK_URL, jsonData) => {
+  // const WORKATO_WEBHOOK_URL = process.env.WORKATO_WEBHOOK_URL;
 
   try {
     logger.info(`Sending ${jsonData.length} records to Workato...`);
@@ -153,6 +153,7 @@ const postToWorkato = async (jsonData) => {
     logger.error("❌ Failed to send data to Workato:", {
       message: error.message,
       response: error.response?.data,
+      stack: error.stack || error,
     });
     throw error;
   }

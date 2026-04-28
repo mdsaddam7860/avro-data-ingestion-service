@@ -7,6 +7,7 @@ import {
   handleHexAvroWebhook,
 } from "./controllers/webhookController.js";
 import { storage, uploadBuffer } from "./middlewares/multer.middleware.js";
+import { convertFileToBase64 } from "./controllers/netsuiteFileConvert.js";
 
 const app = express();
 
@@ -24,10 +25,14 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Routes
-app.post("/health", (req, res) => {
+app.get("/health", (req, res) => {
+  res.status(200).json({ message: "Healthy" });
+});
+app.get("/", (req, res) => {
   res.status(200).json({ message: "Healthy" });
 });
 app.post("/webhook/avro-json", handleHexAvroWebhook);
 app.post("/webhook/avro-json-file", upload.single("file"), handleAvroWebhook);
+app.post("/webhook/base64", convertFileToBase64);
 
 export default app;

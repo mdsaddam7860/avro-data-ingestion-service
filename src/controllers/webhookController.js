@@ -8,6 +8,36 @@ import { logger } from "../index.js";
 // import fs from "fs"; // Use 'const fs = require('fs')' if not using ESM
 import fs from "fs/promises";
 
+// Define the fields you want to keep (yellow-highlighted fields)
+const yellowFields = [
+  "event_id",
+  "user_id",
+  "session_id",
+  "time",
+  "type",
+  "library",
+  "platform",
+  "device_type",
+  "country",
+  "region",
+  "city",
+  "referrer",
+  "utm_source",
+  "utm_campaign",
+  "utm_medium",
+  "utm_term",
+  "utm_content",
+  "email",
+  "username",
+  "phone2",
+  "phone1",
+  "lastname",
+  "userid",
+  "companyid",
+  "firstname",
+  "id",
+];
+
 const handleAvroWebhook = (req, res) => {
   try {
     if (!req.file) {
@@ -80,7 +110,7 @@ async function processInBackground(filePath) {
 
 // const handleHexAvroWebhook = async (req, res) => {
 //   try {
-//     // logger.info(`📤 Received Body ${JSON.stringify(req.body, null, 2)}`);
+//     // logger.info(`📤 Received Body ${JSON.stringify(req.body)}`);
 //     const rawHex = req.body.hexData;
 
 //     if (!rawHex || typeof rawHex !== "string") {
@@ -111,7 +141,11 @@ async function processInBackground(filePath) {
  */
 const handleHexAvroWebhook = async (req, res) => {
   try {
-    const rawHex = req.body.hexData;
+    const body = req.body;
+    const tableName = body?.table_name || null;
+    const rawHex = body?.hexData;
+
+    logger.info(`📤 Received Body: ${JSON.stringify(body)}`);
 
     // 1. Structural Validation
     if (!rawHex || typeof rawHex !== "string") {
@@ -136,7 +170,7 @@ const handleHexAvroWebhook = async (req, res) => {
     });
 
     // 4. Fire and Forget with a Safety Net
-    processInBackgroundAvroToJson(rawHex).catch((err) => {
+    processInBackgroundAvroToJson(rawHex, tableName).catch((err) => {
       logger.error("🔥 Critical Background Failure:", err);
     });
   } catch (error) {
@@ -150,7 +184,7 @@ const handleHexAvroWebhook = async (req, res) => {
 /**
  * BACKGROUND SERVICE: Robust and detailed.
  */
-async function processInBackgroundAvroToJson(rawHex) {
+async function processInBackgroundAvroToJson(rawHex, tableName) {
   try {
     // 1. Sanitize input (RegEx only allows Hex characters)
     const cleanHex = rawHex.replace(/[^0-9a-fA-F]/g, "");
@@ -164,17 +198,36 @@ async function processInBackgroundAvroToJson(rawHex) {
     // 2. Decode
     const jsonData = await processAvroHexToJson(avroBuffer);
 
-    if (!jsonData || jsonData.length === 0) {
+    // first extract table name
+
+    const extractTableName = extractTableNameFn(tableName);
+    const data = modifyData(jsonData, extractTableName);
+
+    // Modify/transform data here if needed before sending to target and add table_name in the record.
+
+    logger.debug(`Data: ${JSON.stringify(data)}`);
+
+    if (!data || data.length === 0) {
       logger.warn("⚠️ Avro decoded successfully but contains 0 records.");
       return;
+    }
+
+    let WORKATO_WEBHOOK_URL = null;
+    if (extractTableName === "users") {
+      WORKATO_WEBHOOK_URL = process.env.WORKATO_WEBHOOK_URL1;
+    } else {
+      WORKATO_WEBHOOK_URL = process.env.WORKATO_WEBHOOK_URL2;
     }
 
     // 3. Send to Target (Workato/HubSpot)
     // Wrap in a separate try/catch so a network error doesn't lose the local log of data
     try {
-      const postToTargetResponse = await postToWorkato(jsonData);
+      const postToTargetResponse = await postToWorkato(
+        WORKATO_WEBHOOK_URL,
+        data
+      );
       logger.info(
-        `✅ Successfully sent ${jsonData.length} ${JSON.stringify(
+        `Successfully sent ${data.length} ${JSON.stringify(
           postToTargetResponse,
           null,
           2
@@ -189,6 +242,79 @@ async function processInBackgroundAvroToJson(rawHex) {
       stack: error.stack,
     });
   }
+}
+
+function modifyData(jsonData, heapTableName2 = null) {
+  let modifiedData = null;
+
+  if (heapTableName2 === "users") {
+    modifiedData = jsonData
+      .filter((item) => item && item.user_email)
+      .map((item) => ({
+        // const modifiedItem = { ...item };
+        // modifiedItem.table_name = heapTableName2;
+        // return modifiedItem;
+        ...item,
+        table_name: heapTableName2,
+      }));
+  } else {
+    // Modified function - keeps ONLY yellow fields + table_name
+    modifiedData = jsonData.map((item) => {
+      // Create new object with only yellow fields
+      const modifiedItem = {};
+
+      // Copy only yellow-highlighted fields from original item
+      yellowFields.forEach((field) => {
+        if (item.hasOwnProperty(field)) {
+          modifiedItem[field] = item[field];
+        }
+      });
+
+      // Add the table_name field
+      modifiedItem.table_name = heapTableName2;
+
+      return modifiedItem;
+    });
+  }
+  return modifiedData;
+}
+
+// function extractTableNameFn(tableName) {
+//   // Method 1: Regex
+//   const match = tableName.match(/\/_heap_table_name=([^/]+)\//);
+//   const heapTableName = match ? match[1] : null;
+//   logger.info(`heapTableName: ${heapTableName}`); // product_create_estimate_click_save
+
+//   // Method 2: Split
+//   const heapTableName2 = tableName.split("/_heap_table_name=")[1].split("/")[0];
+//   logger.info(`tableName: ${heapTableName2}`);
+//   return heapTableName2;
+// }
+function extractTableNameFn(tableName) {
+  // Add a safety check to ensure tableName exists and is a string
+  if (!tableName || typeof tableName !== "string") {
+    logger.error(
+      `Invalid tableName provided to extractTableNameFn: ${tableName}`
+    );
+    return null; // Return null or a default value to prevent the crash
+  }
+
+  // Method 1: Regex
+  const match = tableName.match(/\/_heap_table_name=([^/]+)\//);
+  const heapTableName = match ? match[1] : null;
+  logger.info(`heapTableName: ${heapTableName}`);
+
+  // Method 2: Split (with an added safety check)
+  if (tableName.includes("/_heap_table_name=")) {
+    const heapTableName2 = tableName
+      .split("/_heap_table_name=")[1]
+      .split("/")[0];
+    logger.info(`tableName: ${heapTableName2}`);
+    return heapTableName2;
+  }
+
+  // Fallback if the specific string isn't found
+  return heapTableName;
 }
 // async function processInBackgroundAvroToJson(rawHex) {
 //   try {
