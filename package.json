@@ -4,8 +4,8 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "test": "node avro-data-ingestion-servoce.js",
-    "start": "node avro-data-ingestion-servoce.js"
+    "test": "node avro-data-ingestion-service.js",
+    "start": "node avro-data-ingestion-service.js"
   },
   "repository": {
     "type": "git",

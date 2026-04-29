@@ -124,30 +124,6 @@ const postToWorkato = async (WORKATO_WEBHOOK_URL, jsonData) => {
       { name: `postToWorkato` }
     );
 
-    // const response = await axios.post(
-    //   WORKATO_WEBHOOK_URL,
-    //   {
-    //     source: "AvroIntegration",
-    //     timestamp: new Date().toISOString(),
-    //     record_count: jsonData.length,
-    //     data: jsonData, // Your flattened array
-    //   },
-    //   {
-    //     headers: {
-    //       "Content-Type": "application/json",
-    //       // If your Workato webhook has security enabled:
-    //       // 'API-Token': process.env.WORKATO_API_TOKEN
-    //     },
-    //     // Increase timeout for larger Avro files
-    //     timeout: 30000,
-    //   }
-    // );
-
-    logger.info(
-      `✅ Workato Response: ${response.status} - ${JSON.stringify(
-        response.data
-      )}`
-    );
     return response.data;
   } catch (error) {
     logger.error("❌ Failed to send data to Workato:", {

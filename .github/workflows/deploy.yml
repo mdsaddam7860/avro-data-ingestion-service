@@ -1,6 +1,6 @@
 # Chnage your application name qrcwtvjnna and project directory mricube-hubspot-integration accordingly
 # Add SSH_PRIVATE_KEY ,SERVER_IP, and SERVER_USER as secrets in your GitHub repository settings
-# Also change this mri_cube_server to your app name in pm2 restart command
+# Also change this avro-data-ingestion-servoce to your app name in pm2 restart command
 # Remove workflow_dispatch: if you don't want to trigger the workflow manually
 # Uncomment the push section if you want to trigger the workflow on push to main branch
 
@@ -33,7 +33,7 @@ jobs:
           set -e
 
           # Go to project directory
-          cd ~/applications/qrcwtvjnna/public_html/mricube-hubspot-integration
+          cd ~/applications/qpgbvjebhw/public_html
 
           # Pull latest code
           git pull origin main
@@ -43,7 +43,7 @@ jobs:
 
           # Ensure PM2 is in PATH and restart/start the app
           export PATH=$PATH:/usr/local/bin
-          /home/master/bin/npm/lib/node_modules/bin/pm2 restart mri_cube_server || /home/master/bin/npm/lib/node_modules/bin/pm2 start ecosystem.config.js
+          /home/master/bin/npm/lib/node_modules/bin/pm2 restart avro-data-ingestion-servoce || /home/master/bin/npm/lib/node_modules/bin/pm2 start ecosystem.config.js
 
           echo "Deployment completed successfully"
           EOF

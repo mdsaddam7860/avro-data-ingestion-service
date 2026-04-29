@@ -5,6 +5,7 @@ import {
   processAvroHexToJson,
 } from "../services/avroService.js";
 import { logger } from "../index.js";
+import { handleBatching } from "../utils/handleBatching.js";
 // import fs from "fs"; // Use 'const fs = require('fs')' if not using ESM
 import fs from "fs/promises";
 
@@ -145,7 +146,7 @@ const handleHexAvroWebhook = async (req, res) => {
     const tableName = body?.table_name || null;
     const rawHex = body?.hexData;
 
-    logger.info(`📤 Received Body: ${JSON.stringify(body)}`);
+    // logger.info(`Received Body: ${JSON.stringify(body)}`);
 
     // 1. Structural Validation
     if (!rawHex || typeof rawHex !== "string") {
@@ -205,7 +206,7 @@ async function processInBackgroundAvroToJson(rawHex, tableName) {
 
     // Modify/transform data here if needed before sending to target and add table_name in the record.
 
-    logger.debug(`Data: ${JSON.stringify(data)}`);
+    // logger.debug(`Data: ${JSON.stringify(data)}`);
 
     if (!data || data.length === 0) {
       logger.warn("⚠️ Avro decoded successfully but contains 0 records.");
@@ -215,6 +216,7 @@ async function processInBackgroundAvroToJson(rawHex, tableName) {
     let WORKATO_WEBHOOK_URL = null;
     if (extractTableName === "users") {
       WORKATO_WEBHOOK_URL = process.env.WORKATO_WEBHOOK_URL1;
+      return await handleBatching(extractTableName, data, WORKATO_WEBHOOK_URL);
     } else {
       WORKATO_WEBHOOK_URL = process.env.WORKATO_WEBHOOK_URL2;
     }
@@ -251,12 +253,14 @@ function modifyData(jsonData, heapTableName2 = null) {
     modifiedData = jsonData
       .filter((item) => item && item.user_email)
       .map((item) => ({
-        // const modifiedItem = { ...item };
-        // modifiedItem.table_name = heapTableName2;
-        // return modifiedItem;
-        ...item,
-        table_name: heapTableName2,
+        user_email: item.user_email,
+        user_fullname: item.user_full_name, // Mapping 'user_full_name' to 'user_fullname'
+        user_id: String(item.user_id), // Converting numeric ID to String
+        company_id: item.company_id,
+        company_name: item.company_name,
+        company_sfdcid: item.company_sfdcid,
       }));
+    // table_name: heapTableName2,
   } else {
     // Modified function - keeps ONLY yellow fields + table_name
     modifiedData = jsonData.map((item) => {
