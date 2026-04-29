@@ -33,7 +33,7 @@ jobs:
           set -e
 
           # Go to project directory
-          cd ~/applications/qpgbvjebhw/public_html
+          cd ~/applications/jcrehmebyx/public_html
 
           # Pull latest code
           git pull origin main

@@ -159,7 +159,7 @@ const handleHexAvroWebhook = async (req, res) => {
     // We check the first 8 characters (4 bytes) before doing anything else
     const startOfData = rawHex.trim().substring(0, 8).toLowerCase();
     if (!startOfData.includes("4f626a01")) {
-      logger.warn(`🚫 Rejected malformed payload. Header: ${startOfData}`);
+      logger.warn(`Rejected malformed payload. Header: ${startOfData}`);
       return res.status(400).json({
         error: "Payload is not a valid Avro file (Missing Magic Bytes).",
       });
@@ -172,7 +172,7 @@ const handleHexAvroWebhook = async (req, res) => {
 
     // 4. Fire and Forget with a Safety Net
     processInBackgroundAvroToJson(rawHex, tableName).catch((err) => {
-      logger.error("🔥 Critical Background Failure:", err);
+      logger.error("Critical Background Failure:", err);
     });
   } catch (error) {
     logger.error(`Webhook Error handleHexAvroWebhook: ${error.message}`);
@@ -216,7 +216,7 @@ async function processInBackgroundAvroToJson(rawHex, tableName) {
     let WORKATO_WEBHOOK_URL = null;
     if (extractTableName === "users") {
       WORKATO_WEBHOOK_URL = process.env.WORKATO_WEBHOOK_URL1;
-      return await handleBatching(extractTableName, data, WORKATO_WEBHOOK_URL);
+      // return await handleBatching(extractTableName, data, WORKATO_WEBHOOK_URL);
     } else {
       WORKATO_WEBHOOK_URL = process.env.WORKATO_WEBHOOK_URL2;
     }
@@ -230,9 +230,7 @@ async function processInBackgroundAvroToJson(rawHex, tableName) {
       );
       logger.info(
         `Successfully sent ${data.length} ${JSON.stringify(
-          postToTargetResponse,
-          null,
-          2
+          postToTargetResponse
         )} records to Target.`
       );
     } catch (apiError) {
@@ -251,7 +249,7 @@ function modifyData(jsonData, heapTableName2 = null) {
 
   if (heapTableName2 === "users") {
     modifiedData = jsonData
-      .filter((item) => item && item.user_email)
+      .filter((item) => item && item.user_email && item.company_name)
       .map((item) => ({
         user_email: item.user_email,
         user_fullname: item.user_full_name, // Mapping 'user_full_name' to 'user_fullname'
