@@ -8,36 +8,7 @@ import { logger } from "../index.js";
 import { handleBatching } from "../utils/handleBatching.js";
 // import fs from "fs"; // Use 'const fs = require('fs')' if not using ESM
 import fs from "fs/promises";
-
-// Define the fields you want to keep (yellow-highlighted fields)
-const yellowFields = [
-  "event_id",
-  "user_id",
-  "session_id",
-  "time",
-  "type",
-  "library",
-  "platform",
-  "device_type",
-  "country",
-  "region",
-  "city",
-  "referrer",
-  "utm_source",
-  "utm_campaign",
-  "utm_medium",
-  "utm_term",
-  "utm_content",
-  "email",
-  "username",
-  "phone2",
-  "phone1",
-  "lastname",
-  "userid",
-  "companyid",
-  "firstname",
-  "id",
-];
+import { modifyData } from "../utils/helper.js";
 
 const handleAvroWebhook = (req, res) => {
   try {
@@ -206,7 +177,7 @@ async function processInBackgroundAvroToJson(rawHex, tableName) {
 
     // Modify/transform data here if needed before sending to target and add table_name in the record.
 
-    // logger.debug(`Data: ${JSON.stringify(data)}`);
+    // logger.debug(`Data: ${JSON.stringify(data, null, 2)}`);
 
     if (!data || data.length === 0) {
       logger.warn("⚠️ Avro decoded successfully but contains 0 records.");
@@ -264,68 +235,6 @@ function extractNames(fullName) {
   const lastName = nameParts.join(" ");
 
   return { firstName, lastName };
-}
-
-function modifyData(jsonData, heapTableName2 = null) {
-  let modifiedData = null;
-
-  if (heapTableName2 === "users" && jsonData.length > 0) {
-    const payload1 = jsonData
-      .filter((item) => item && item?.company_sfdcid && item?.company_name)
-      .map((item) => ({
-        name: item.company_name,
-        sourceId: item.company_sfdcid,
-      }));
-
-    const payload2 = jsonData
-      .filter(
-        (item) =>
-          item &&
-          item?.user_email &&
-          item?.company_name &&
-          item?.company_sfdcid &&
-          item?.user_id
-      )
-      .map((item) => {
-        // 1. Extract first Name and last Name
-        const { firstName, lastName } = extractNames(item?.user_full_name);
-
-        // 2. Explicitly return the new object
-        return {
-          firstName,
-          lastName,
-          companyId: `srcid-${item.company_sfdcid}`,
-          email: item.user_email,
-          // position: item.user_email,
-          externalId: String(item.user_id),
-        };
-      });
-
-    const data = {
-      Results1: payload1,
-      Results2: payload2,
-    };
-    return data;
-  } else {
-    // Modified function - keeps ONLY yellow fields + table_name
-    modifiedData = jsonData.map((item) => {
-      // Create new object with only yellow fields
-      const modifiedItem = {};
-
-      // Copy only yellow-highlighted fields from original item
-      yellowFields.forEach((field) => {
-        if (item.hasOwnProperty(field)) {
-          modifiedItem[field] = item[field];
-        }
-      });
-
-      // Add the table_name field
-      modifiedItem.table_name = heapTableName2;
-
-      return modifiedItem;
-    });
-  }
-  return modifiedData;
 }
 
 // function extractTableNameFn(tableName) {
