@@ -216,7 +216,6 @@ async function processInBackgroundAvroToJson(rawHex, tableName) {
     let WORKATO_WEBHOOK_URL = null;
     if (extractTableName === "users") {
       WORKATO_WEBHOOK_URL = process.env.WORKATO_WEBHOOK_URL1;
-      // return await handleBatching(extractTableName, data, WORKATO_WEBHOOK_URL);
     } else {
       WORKATO_WEBHOOK_URL = process.env.WORKATO_WEBHOOK_URL2;
     }
@@ -244,21 +243,61 @@ async function processInBackgroundAvroToJson(rawHex, tableName) {
   }
 }
 
+function extractNames(fullName) {
+  // Handle empty or invalid inputs
+  if (!fullName || typeof fullName !== "string") {
+    return { firstName: "", lastName: "" };
+  }
+
+  // Remove leading/trailing spaces and split by one or more spaces
+  const nameParts = fullName.trim().split(/\s+/);
+
+  // If there's only one name entered
+  if (nameParts.length === 1) {
+    return { firstName: nameParts[0], lastName: "" };
+  }
+
+  // The first element is the first name
+  const firstName = nameParts.shift();
+
+  // The remaining elements make up the last name
+  const lastName = nameParts.join(" ");
+
+  return { firstName, lastName };
+}
+
 function modifyData(jsonData, heapTableName2 = null) {
   let modifiedData = null;
 
-  if (heapTableName2 === "users") {
-    modifiedData = jsonData
-      .filter((item) => item && item.user_email && item.company_name)
-      .map((item) => ({
-        user_email: item.user_email,
-        user_fullname: item.user_full_name, // Mapping 'user_full_name' to 'user_fullname'
-        user_id: String(item.user_id), // Converting numeric ID to String
-        company_id: item.company_id,
-        company_name: item.company_name,
-        company_sfdcid: item.company_sfdcid,
-      }));
-    // table_name: heapTableName2,
+  if (heapTableName2 === "users" && jsonData.length > 0) {
+    modifiedData = jsonData.filter(
+      (item) => item && item.user_email && item.company_name
+    );
+    const payload1 = modifiedData.map((item) => ({
+      name: item.user_full_name,
+      sourceId: item.company_sfdcid,
+    }));
+
+    const payload2 = modifiedData.map((item) => {
+      // 1. Extract first Name and last Name
+      const { firstName, lastName } = extractNames(item?.user_full_name);
+
+      // 2. Explicitly return the new object
+      return {
+        firstName,
+        lastName,
+        companyId: `srcid-${item.company_sfdcid}`,
+        email: item.user_email,
+        // position: item.user_email,
+        externalId: String(item.user_id),
+      };
+    });
+
+    const data = {
+      Results1: payload1,
+      Results2: payload2,
+    };
+    return data;
   } else {
     // Modified function - keeps ONLY yellow fields + table_name
     modifiedData = jsonData.map((item) => {
